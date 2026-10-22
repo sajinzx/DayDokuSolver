@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "puzzle_version": "honeycomb-1",
+  "challenge_id": "fa0842fee98346d7a51abe49",
+  "date": "2026-10-22",
+  "actions": [
+    {
+      "action": "place",
+      "piece_id": "P01",
+      "origin": {
+        "q": -3,
+        "r": 3
+      },
+      "rotation": 0,
+      "flipped": false
+    },
+    {
+      "action": "place",
+      "piece_id": "P03",
+      "origin": {
+        "q": -3,
+        "r": 4
+      },
+      "rotation": 1,
+      "flipped": false
+    },
+    {
+      "action": "place",
+      "piece_id": "P02",
+      "origin": {
+        "q": -3,
+        "r": 6
+      },
+      "rotation": 0,
+      "flipped": false
+    },
+    {
+      "action": "place",
+      "piece_id": "P04",
+      "origin": {
+        "q": -1,
+        "r": 1
+      },
+      "rotation": 0,
+      "flipped": false
+    },
+    {
+      "action": "place",
+      "piece_id": "P05",
+      "origin": {
+        "q": -1,
+        "r": 3
+      },
+      "rotation": 3,
+      "flipped": false
+    },
+    {
+      "action": "place",
+      "piece_id": "P06",
+      "origin": {
+        "q": 0,
+        "r": 4
+      },
+      "rotation": 0,
+      "flipped": false
+    },
+    {
+      "action": "place",
+      "piece_id": "P08",
+      "origin": {
+        "q": 0,
+        "r": 6
+      },
+      "rotation": 3,
+      "flipped": false
+    },
+    {
+      "action": "place",
+      "piece_id": "P11",
+      "origin": {
+        "q": 1,
+        "r": 0
+      },
+      "rotation": 5,
+      "flipped": true
+    },
+    {
+      "action": "place",
+      "piece_id": "P09",
+      "origin": {
+        "q": 2,
+        "r": 2
+      },
+      "rotation": 1,
+      "flipped": false
+    },
+    {
+      "action": "place",
+      "piece_id": "P12",
+      "origin": {
+        "q": 2,
+        "r": 3
+      },
+      "rotation": 1,
+      "flipped": false
+    },
+    {
+      "action": "place",
+      "piece_id": "P10",
+      "origin": {
+        "q": 3,
+        "r": 4
+      },
+      "rotation": 4,
+      "flipped": true
+    },
+    {
+      "action": "place",
+      "piece_id": "P07",
+      "origin": {
+        "q": 4,
+        "r": 0
+      },
+      "rotation": 1,
+      "flipped": false
+    }
+  ]
+}

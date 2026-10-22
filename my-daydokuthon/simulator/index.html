@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Daydoku Simulator</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --ink: #1f2328; --muted: #656d76; --line: #d8d6cf;
+    --cell: #ece9e1; --hole: #1f2328; --hole-ink: #ffffff; --accent: #2457c5;
+    --good: #1a7f37; --bad: #cf222e; --warn: #9a6700;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #14161a; --card: #1d2026; --ink: #e6e8eb; --muted: #9aa3ad; --line: #353a42;
+      --cell: #2a2e36; --hole: #f0ede6; --hole-ink: #14161a; --accent: #6e9cff;
+      --good: #3fb950; --bad: #ff6b6b; --warn: #d4a72c;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 1140px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .bar { display: flex; gap: 12px; flex-wrap: wrap; align-items: end; margin-bottom: 20px; }
+  label { display: flex; flex-direction: column; font-size: 12px; color: var(--muted); gap: 4px; }
+  input, button, select { font: inherit; padding: 8px 12px; border-radius: 8px;
+         border: 1px solid var(--line); background: var(--card); color: var(--ink); }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: default; }
+  .grid { display: grid; grid-template-columns: minmax(0, 1fr) 390px; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  .card h2 { font-size: 14px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  svg { width: 100%; height: auto; display: block; }
+  .algo { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 10px; cursor: pointer; }
+  .algo.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+  .algo .name { font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+  .algo .time { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; margin: 4px 0; }
+  .algo .meta { color: var(--muted); font-size: 13px; }
+  .pill { font-size: 12px; padding: 1px 8px; border-radius: 99px; border: 1px solid currentColor; height: fit-content; }
+  .solved { color: var(--good); } .failed { color: var(--bad); } .timeout { color: var(--warn); }
+  .running { color: var(--accent); } .queued { color: var(--muted); }
+  .group { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin: 14px 0 6px; }
+  .group:first-child { margin-top: 0; }
+  #results { max-height: 80vh; overflow-y: auto; padding-right: 4px; }
+  .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+  .controls input[type=range] { padding: 0; flex: 1; min-width: 120px; }
+  #status { color: var(--muted); font-size: 13px; min-height: 20px; align-self: center; }
+  .banner { margin-top: 12px; padding: 10px 12px; border-radius: 8px; background: var(--cell); font-size: 14px; }
+  text { font-family: inherit; pointer-events: none; }
+</style>
+</head>
+<body>
+<main>
+  <h1>⬡ Daydoku Simulator</h1>
+  <p class="sub">Compare greedy, backtracking, genetic and firefly approaches on the honeycomb calendar puzzle, then watch each one work.</p>
+
+  <div class="bar">
+    <label>Date <input type="date" id="date"></label>
+    <label>Exact search limit (s) <input type="number" id="limit" value="30" min="1" max="120" style="width:110px"></label>
+    <label>Metaheuristic limit (s) <input type="number" id="mlimit" value="10" min="1" max="120" style="width:110px"></label>
+    <button class="primary" id="solve">Solve &amp; compare</button>
+    <span id="status"></span>
+  </div>
+
+  <div class="grid">
+    <div class="card">
+      <h2 id="boardTitle">Board</h2>
+      <svg id="board" viewBox="0 0 10 10"></svg>
+      <div class="controls">
+        <button id="play" disabled>▶ Animate</button>
+        <button id="final" disabled>Show final</button>
+        <label style="flex:1">Speed <input type="range" id="speed" min="1" max="100" value="40"></label>
+      </div>
+      <div id="stepInfo" style="color:var(--muted);font-size:13px;margin-top:8px"></div>
+      <div id="banner" class="banner" hidden></div>
+    </div>
+
+    <div class="card">
+      <h2>Results</h2>
+      <div id="results"><span style="color:var(--muted)">Pick a date and press “Solve &amp; compare”.</span></div>
+    </div>
+  </div>
+</main>
+
+<script>
+const NAMES = {
+  greedy:        ["Greedy", "First piece that fits at the lowest empty cell, largest pieces first. Never undoes a move."],
+  backtrack:     ["Backtracking", "Same search, but removes the last piece and tries again when stuck."],
+  pruned:        ["Backtracking + pruning", "Abandons a move as soon as an enclosed empty region can't be filled by the remaining pieces."],
+  pruned_greedy: ["Pruning + greedy order & cutoff", "Tries the greedy-preferred placement first; if an attempt exceeds its node budget it restarts with a bigger budget and a reshuffled order."],
+  ga:            ["Genetic algorithm", "Evolves 12-gene choice sequences (selection, crossover, mutation) decoded into boards; fitness = cells covered."],
+  firefly:       ["Firefly algorithm", "Same encoding; each firefly drifts toward every brighter one (more cells covered), attraction fading with distance."],
+  hybrid:        ["GA + Firefly hybrid", "Genetic algorithm whose mutation step is a firefly move toward a brighter individual."],
+};
+const GROUPS = [["Constructive", ["greedy"]],
+                ["Exact search", ["backtrack", "pruned", "pruned_greedy"]],
+                ["Metaheuristics (randomised, seed 42)", ["ga", "firefly", "hybrid"]]];
+const META = ["ga", "firefly", "hybrid"];
+const PALETTE = ["#e4572e","#f3a712","#6a994e","#2e86ab","#a23b72","#17bebb",
+                 "#c1666b","#8a6fdf","#5d737e","#d4a017","#3d9970","#e07be0"];
+const $ = id => document.getElementById(id);
+const SQ3 = Math.sqrt(3);
+
+let data = null, results = {}, active = "pruned_greedy", timer = null, state = null, runId = 0;
+const pending = new Set();
+
+$("date").value = new Date().toISOString().slice(0, 10);
+
+const px = (q, r) => [SQ3 * (q + r / 2), 1.5 * r];
+function hexPath(cx, cy, s) {
+  let d = "";
+  for (let i = 0; i < 6; i++) {
+    const a = Math.PI / 180 * (60 * i - 30);
+    d += (i ? "L" : "M") + (cx + s * Math.cos(a)).toFixed(3) + " " + (cy + s * Math.sin(a)).toFixed(3);
+  }
+  return d + "Z";
+}
+function fmt(ms) {
+  if (ms < 1) return (ms * 1000).toFixed(0) + " µs";
+  if (ms < 1000) return ms.toFixed(1) + " ms";
+  return (ms / 1000).toFixed(2) + " s";
+}
+const pieceColor = id => PALETTE[(parseInt(id.slice(1)) - 1) % PALETTE.length];
+
+function drawBoard() {
+  const svg = $("board");
+  const pts = data.board.cells.map(c => px(c.q, c.r));
+  const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]), pad = 1.2;
+  const minX = Math.min(...xs) - pad, minY = Math.min(...ys) - pad;
+  svg.setAttribute("viewBox", `${minX} ${minY} ${Math.max(...xs) - minX + pad} ${Math.max(...ys) - minY + pad}`);
+  const owner = {};
+  for (const [pid, cells] of Object.entries(state.placed))
+    for (const [q, r] of cells) owner[q + "," + r] = pid;
+  let html = "";
+  data.board.cells.forEach((c, i) => {
+    const [cx, cy] = pts[i], pid = owner[c.q + "," + c.r];
+    let fill = "var(--cell)", ink = "var(--muted)";
+    if (c.exposed) { fill = "var(--hole)"; ink = "var(--hole-ink)"; }
+    else if (pid) { fill = pieceColor(pid); ink = "#fff"; }
+    html += `<path d="${hexPath(cx, cy, 0.93)}" fill="${fill}" stroke="var(--line)" stroke-width="0.04"/>`;
+    html += `<text x="${cx}" y="${cy + 0.2}" text-anchor="middle" font-size="0.62" fill="${ink}">${c.value}</text>`;
+  });
+  svg.innerHTML = html;
+}
+
+function resetState() { state = { placed: {}, i: 0 }; }
+function applyStep(s) {
+  if (s[0] === "p") state.placed[s[1]] = s[2];
+  else if (s[0] === "r") delete state.placed[s[1]];
+  else if (s[0] === "x") state.placed = {};
+  else if (s[0] === "f") { state.placed = {}; for (const [pid, cells] of s[1]) state.placed[pid] = cells; }
+}
+function showFinal() {
+  stop();
+  const res = results[active];
+  state = { placed: {}, i: res ? res.steps.length : 0 };
+  if (res) for (const p of res.placements) state.placed[p.piece] = p.cells;
+  drawBoard();
+  $("stepInfo").textContent = !res ? "" : res.status === "solved"
+    ? "Final board — all 12 pieces placed."
+    : `Final board — ${res.pieces_placed} of 12 pieces placed, ${res.covered}/47 cells covered.`;
+}
+function stop() { clearInterval(timer); timer = null; $("play").textContent = "▶ Animate"; }
+function play() {
+  const res = results[active];
+  if (!res) return;
+  if (timer) return stop();
+  if (state.i >= res.steps.length) resetState();
+  $("play").textContent = "⏸ Pause";
+  const frames = META.includes(active);  // metaheuristics log one frame per improvement
+  const speed = +$("speed").value;
+  timer = setInterval(() => {
+    const per = frames ? 1 : Math.max(1, Math.round(Math.pow(speed / 8, 2)));
+    for (let k = 0; k < per && state.i < res.steps.length; k++) applyStep(res.steps[state.i++]);
+    drawBoard();
+    $("stepInfo").textContent = `${frames ? "Improvement" : "Step"} ${state.i} / ${res.steps.length}` +
+      (res.steps_truncated ? " (animation capped; “Show final” gives the true end state)" : "");
+    if (state.i >= res.steps.length) { stop(); if (!res.steps_truncated) showFinal(); }
+  }, frames ? Math.max(30, 600 - 5.5 * speed) : 30);
+}
+
+function card(k) {
+  const r = results[k];
+  let body;
+  if (!r) body = `<div class="time" style="color:var(--muted)">…</div>`;
+  else {
+    const extra = [];
+    if (META.includes(k))
+      extra.push(`${r.nodes.toLocaleString()} evaluations`,
+                 `${r.generations.toLocaleString()} ${k === "firefly" ? "iterations" : "generations"}`);
+    else extra.push(`${r.nodes.toLocaleString()} nodes`, `${r.backtracks.toLocaleString()} backtracks`);
+    if (r.restarts) extra.push(`${r.restarts} restart${r.restarts > 1 ? "s" : ""}`);
+    extra.push(`${r.covered}/47 cells`);
+    body = `<div class="time">${r.status === "timeout" ? "&gt; limit (" + fmt(r.time_ms) + ")" : fmt(r.time_ms)}</div>
+            <div class="meta">${extra.join(" · ")}</div>`;
+  }
+  const st = r ? r.status : (pending.has(k) ? "running" : "queued");
+  return `<div class="algo ${k === active ? "active" : ""}" data-k="${k}">
+    <div class="name"><span>${NAMES[k][0]}</span><span class="pill ${st}">${st}</span></div>
+    ${body}<div class="meta">${NAMES[k][1]}</div></div>`;
+}
+function renderResults() {
+  $("results").innerHTML = GROUPS.map(([g, ks]) =>
+    `<div class="group">${g}</div>` + ks.map(card).join("")).join("");
+  document.querySelectorAll(".algo").forEach(el => el.onclick = () => select(el.dataset.k));
+  const done = Object.values(results);
+  const solved = done.filter(r => r.status === "solved").sort((a, b) => a.time_ms - b.time_ms);
+  const b = $("banner");
+  if (!solved.length) { b.hidden = true; return; }
+  b.hidden = false;
+  const g = results.greedy;
+  const all = done.length === Object.keys(NAMES).length;
+  b.innerHTML = `<b>${all ? "Fastest solution" : "Fastest so far"}: ${NAMES[solved[0].algo][0]} in ${fmt(solved[0].time_ms)}.</b> ` +
+    (g ? (g.status === "solved" ? "Greedy happened to work for this date."
+          : `Greedy got stuck after ${g.pieces_placed} of 12 pieces — it can't undo a bad early choice, which is why the puzzle needs search.`) : "");
+}
+function select(k) {
+  active = k; stop(); resetState(); renderResults();
+  $("boardTitle").textContent = `${NAMES[k][0]} — ${data.date}`;
+  $("play").disabled = $("final").disabled = !results[k];
+  showFinal();
+}
+
+$("play").onclick = play;
+$("final").onclick = showFinal;
+$("solve").onclick = async () => {
+  const d = $("date").value;
+  if (!d) return;
+  const me = ++runId;
+  $("solve").disabled = true; stop(); results = {}; pending.clear();
+  $("status").textContent = "";
+  try {
+    const resp = await fetch(`/api/board?date=${d}`);
+    if (!resp.ok) throw new Error((await resp.json()).error);
+    data = await resp.json();
+    resetState(); renderResults(); drawBoard();
+    $("boardTitle").textContent = `${NAMES[active][0]} — ${data.date}`;
+    for (const k of Object.keys(NAMES)) {
+      if (me !== runId) return;
+      pending.add(k); renderResults();
+      $("status").textContent = `Running ${NAMES[k][0]}…`;
+      const lim = META.includes(k) ? $("mlimit").value : $("limit").value;
+      const r = await fetch(`/api/run?date=${d}&algo=${k}&limit=${lim}`);
+      if (!r.ok) throw new Error((await r.json()).error);
+      const res = await r.json();
+      if (me !== runId) return;
+      pending.delete(k); results[k] = res;
+      renderResults();
+      if (k === active) select(active);
+    }
+    $("status").textContent = "";
+  } catch (e) {
+    $("status").textContent = "Error: " + e.message;
+  }
+  if (me === runId) $("solve").disabled = false;
+};
+</script>
+</body>
+</html>
